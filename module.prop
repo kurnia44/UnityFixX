@@ -1,7 +1,7 @@
 id=unityfix
 name=UnityFix X
-version=v10-multi
-versionCode=10
+version=v10.1-checker
+versionCode=11
 author=eLSanz (@Reichtw) — fork of @LeanHijosdesusMadres
 description=Report max CPU freq to Unity/Unreal/Cocos/Godot libs. Multi-app profiles, fully configurable from WebUI (KernelSU / APatch / MMRL).
 support=https://t.me/modulostk

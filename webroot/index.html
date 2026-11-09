@@ -25,6 +25,7 @@
     color:var(--dim);white-space:nowrap}
   .badge.ok{color:#0b0f14;background:var(--acc);border-color:var(--acc);font-weight:600}
   .badge.no{color:#0b0f14;background:var(--bad);border-color:var(--bad);font-weight:600}
+  .badge.warn{color:#0b0f14;background:var(--warn);border-color:var(--warn);font-weight:600}
   .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
     padding:14px;margin-bottom:12px}
   .card h2{font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
@@ -211,6 +212,22 @@
   <div class="muted" style="margin-top:9px">
     Pilih app = berlaku global (libs+mask). Tombol ⚙ = override khusus app itu.
   </div>
+</div>
+
+<!-- CHECKER -->
+<div class="card">
+  <h2>Checker — app sudah ikut setting?</h2>
+  <div class="grid2">
+    <div>
+      <span class="lbl">App yang dicek</span>
+      <select id="checkPkg"></select>
+    </div>
+    <div>
+      <span class="lbl">&nbsp;</span>
+      <button class="act" id="checkBtn" style="width:100%">Cek sekarang</button>
+    </div>
+  </div>
+  <div id="checkOut" style="margin-top:12px"><div class="muted">belum dicek</div></div>
 </div>
 
 <!-- LOG -->
@@ -446,6 +463,7 @@
         }
       };
     });
+    if (typeof refreshCheckOptions === "function") refreshCheckOptions();
     box.querySelectorAll("[data-ovlibs]").forEach(function (el) {
       el.oninput = function () {
         var p = el.getAttribute("data-ovlibs");
@@ -474,6 +492,101 @@
         if (S.apps.indexOf(p) < 0) S.apps.push(p);
         renderApps(); renderSearch();
       };
+    });
+  }
+
+  /* ---------- checker ---------- */
+  function parseFlat(txt) {
+    var o = {};
+    (txt || "").split("\n").forEach(function (l) {
+      var i = l.indexOf("=");
+      if (i < 1) return;
+      o[l.slice(0, i).trim().replace(/\./g, "_")] = l.slice(i + 1);
+    });
+    return o;
+  }
+
+  function row(k, v, mark) {
+    return '<div class="row"><div class="k">' + esc(k) + '</div><div class="v mono">' +
+      esc(v == null || v === "" ? "–" : v) + (mark ? " " + mark : "") + "</div></div>";
+  }
+
+  function refreshCheckOptions() {
+    var sel = $("checkPkg");
+    var cur = sel.value;
+    var opts = ['<option value="">auto (app target yang jalan)</option>'];
+    S.apps.forEach(function (p) {
+      opts.push('<option value="' + esc(p) + '">' + esc(p) + "</option>");
+    });
+    sel.innerHTML = opts.join("");
+    if (cur) sel.value = cur;
+  }
+
+  function renderCheck(c) {
+    var v = c.check_verdict || "?";
+    var cls = v === "OK" ? "ok" : v === "FAIL" ? "no" : "warn";
+    var html = "";
+    html += '<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">' +
+      '<span class="badge ' + cls + '">' + esc(v) + "</span>" +
+      '<span class="muted mono" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">' +
+        esc(c.check_pkg || "-") + "</span></div>";
+
+    var running = c.check_running === "1";
+    html += row("App jalan", running ? "ya · " + (c.check_pids || "") : "tidak",
+                running ? "" : "✗");
+    if (running) {
+      html += row("Thread", c.check_threads);
+      html += row("Libs kebaca", c.check_libs_loaded || "belum ada");
+      html += row("Libs belum load", c.check_libs_missing || "-", c.check_libs_missing ? "!" : "");
+    }
+
+    var maskOk = c.check_sysfs_mask === c.check_cfg_mask;
+    html += row("Mask config", c.check_cfg_mask);
+    html += row("Mask sysfs", c.check_sysfs_mask, maskOk ? "✓" : "✗");
+    html += row("Core diharap", "cpu " + (c.check_expected || "-"));
+
+    if (running) {
+      var affOk = c.check_affinity_ok === "1";
+      var pin = c.check_pin === "1";
+      html += row(pin ? "Affinity thread" : "Affinity (info)",
+                  "cpu " + (c.check_affinity || "-"), pin ? (affOk ? "✓" : "✗") : "");
+      html += row("Core dipakai", "cpu " + (c.check_cores_used || "-"));
+    }
+
+    html += row("Libs config", (c.check_cfg_libs || "").split(",").join(", "));
+    html += row("Libs sysfs", (c.check_sysfs_libs || "").split(",").join(", "));
+
+    var freqs = Object.keys(c).filter(function (k) { return k.indexOf("check_freq_") === 0; })
+      .sort(function (a, b) {
+        return parseInt(a.split("_")[2], 10) - parseInt(b.split("_")[2], 10);
+      });
+    if (freqs.length) {
+      html += '<div class="chips" style="margin-top:10px">';
+      freqs.forEach(function (k) {
+        var core = k.split("_")[2], p = (c[k] || "0/0").split("/");
+        var cur = Math.round(parseInt(p[0], 10) / 1000) || 0;
+        var max = Math.round(parseInt(p[1], 10) / 1000) || 0;
+        var hot = max && cur / max > 0.85;
+        html += '<span class="chip' + (hot ? "" : " off") + '">cpu' + core + " " +
+                cur + "/" + max + "M</span>";
+      });
+      html += "</div>";
+    }
+
+    if (c.check_msg) {
+      html += '<div class="muted" style="margin-top:10px">' + esc(c.check_msg) + "</div>";
+    }
+    $("checkOut").innerHTML = html;
+  }
+
+  function runCheck(pkg) {
+    var cmd = q(CMD) + " check" + (pkg ? " " + q(pkg) : "");
+    $("checkOut").innerHTML = '<div class="muted">mengukur…</div>';
+    return run(cmd).then(function (txt) {
+      if (!txt || txt.indexOf("=") < 0) throw new Error("output checker kosong");
+      renderCheck(parseFlat(txt));
+    }).catch(function (e) {
+      $("checkOut").innerHTML = '<div class="muted">gagal cek: ' + esc(e.message) + "</div>";
     });
   }
 
@@ -622,6 +735,7 @@
       if (!S.ready) { toast("belum siap", true); return; }
       save().catch(function (e) { toast("gagal: " + e.message, true); });
     };
+    $("checkBtn").onclick = function () { runCheck($("checkPkg").value); };
     $("applyNow").onclick = function () {
       runq(CMD, "apply").then(function (o) {
         toast(String(o).trim() || "applied");
@@ -636,6 +750,7 @@
     $("nobridge").classList.add("hidden");
     loadInstalled();
     loadLog();
+    runCheck("");
   }).catch(function (e) {
     if (e.message === "nobridge") {
       $("nobridge").classList.remove("hidden");

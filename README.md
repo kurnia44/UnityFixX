@@ -68,3 +68,27 @@ hasilnya mirip untuk kasus "game cuma boleh pakai 4 core", tapi tidak mengubah l
 - Original module & riset sched_lib: **@LeanHijosdesusMadres** (t.me/modulostk)
 - Jimmy Shiu, NotZeetaa, Zackptg5 (MMT-Ex), topjohnwu (Magisk)
 - Fork + WebUI: **eLSanz (@Reichtw)**
+## Checker — tau app-nya beneran ikut setting atau nggak
+
+Modul gak cuma nulis setting lalu diem. Ada verifikasi 4 lapis:
+
+1. **Sysfs vs config** — nilai `sched_lib_mask_force` / `sched_lib_name` di kernel dibanding nilai
+   yang kamu simpan. Kalau kernel nolak tulis (read-only / gak didukung), ketahuan di sini.
+2. **Lib benar-benar ke-load** — tiap library yang kamu daftar dicek ke `/proc/<pid>/maps` app target.
+   Kalau game belum load `libunity.so`, statusnya "belum load", bukan pura-pura sukses.
+3. **Affinity thread** — `Cpus_allowed_list` semua thread app dibanding mask kamu. Ini wajib
+   hijau kalau **Pin affinity** dinyalakan; kalau pin mati cuma ditandai sebagai info, karena
+   patch kernel bekerja per-library, bukan per-proses.
+4. **Frekuensi realtime** — `scaling_cur_freq` per core yang kamu izinkan, dibanding
+   `cpuinfo_max_freq`.
+
+Hasilnya satu verdict: `OK` (semua cocok), `WARN` (jalan tapi ada yang belum sesuai),
+`FAIL` (gak mungkin sesuai — app mati + sysfs beda, atau kernel tanpa patch dan pin mati).
+
+Dari WebUI: kartu **Checker** → pilih app (atau "auto" = app target yang sedang jalan) → **Cek sekarang**.
+Dari terminal:
+
+```
+sh /data/adb/unityfix/bin/unityfix.sh check                 # app target yang jalan
+sh /data/adb/unityfix/bin/unityfix.sh check com.mobile.legends
+```

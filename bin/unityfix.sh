@@ -169,6 +169,160 @@ daemon() {
     done
 }
 
+
+# ---------- checker: apakah app benar-benar sesuai setting ----------
+expand_cores() { # "0-7" -> "0 1 2 3 4 5 6 7"
+    echo "$1" | tr ',' '\n' | while IFS=- read -r _a _b; do
+        if [ -z "$_b" ]; then
+            echo "$_a"
+        else
+            _i=$_a
+            while [ "$_i" -le "$_b" ]; do echo "$_i"; _i=$((_i+1)); done
+        fi
+    done | sort -n | tr '\n' ' '
+}
+
+mask_cores() { # desimal -> "4 5 6 7"
+    _mm="$1"; _nn=$(nproc 2>/dev/null || echo 8); _oo=""; _ii=0
+    while [ "$_ii" -lt "$_nn" ]; do
+        [ $(( (_mm >> _ii) & 1 )) -eq 1 ] && _oo="$_oo $_ii"
+        _ii=$((_ii+1))
+    done
+    echo "$_oo"
+}
+
+pids_of() {
+    _pp=$(pidof "$1" 2>/dev/null)
+    if [ -z "$_pp" ]; then
+        for _dd in /proc/[0-9]*; do
+            [ -r "$_dd/cmdline" ] || continue
+            [ "$(tr '\0' '\n' < "$_dd/cmdline" 2>/dev/null | head -n1)" = "$1" ] && _pp="$_pp ${_dd##*/}"
+        done
+    fi
+    echo "$_pp"
+}
+
+thread_count() { ls /proc/$1/task 2>/dev/null | wc -l | tr -d ' '; }
+
+thread_affinity() { # pid -> union core (spasi)
+    for _t in /proc/$1/task/*; do
+        [ -r "$_t/status" ] || continue
+        _l=$(awk '/^Cpus_allowed_list:/{print $2}' "$_t/status" 2>/dev/null)
+        [ -n "$_l" ] && expand_cores "$_l"
+    done | tr ' ' '\n' | sed '/^$/d' | sort -nu | tr '\n' ' ' | sed 's/ *$//'
+}
+
+thread_cores() { # core yang benar-benar dipakai thread
+    for _t in /proc/$1/task/*/stat; do
+        [ -r "$_t" ] || continue
+        sed 's/^[0-9]* (.*) //' "$_t" 2>/dev/null | awk '{print $37}'
+    done | sed '/^$/d' | sort -n | uniq | tr '\n' ' ' | sed 's/ *$//'
+}
+
+affinity_ok() { # $1 mask $2 "0 1 2 3"
+    for _c in $2; do
+        [ $(( ($1 >> _c) & 1 )) -eq 1 ] || { echo 0; return; }
+    done
+    echo 1
+}
+
+do_check() {
+    ensure
+    _pkg="$1"
+    _apps=$(getv apps | tr ',' ' ')
+
+    if [ -z "$_pkg" ]; then
+        for _a in $_apps; do
+            [ -n "$(pids_of "$_a")" ] && { _pkg="$_a"; break; }
+        done
+        [ -z "$_pkg" ] && _pkg=$(echo $_apps | awk '{print $1}')
+    fi
+
+    _support=$(have_knob)
+    _mode=$(getv mode); [ -z "$_mode" ] && _mode=always
+    _pin=$(getv pin)
+    _gmask=$(getv mask); [ -z "$_gmask" ] && _gmask=240
+    _glibs=$(getv libs)
+    _pmask=$(getv "app.$_pkg.mask"); [ -z "$_pmask" ] && _pmask="$_gmask"
+    _plibs=$(getv "app.$_pkg.libs"); [ -z "$_plibs" ] && _plibs="$_glibs"
+
+    echo "check.pkg=$_pkg"
+    echo "check.support=$_support"
+    echo "check.mode=$_mode"
+    echo "check.pin=$_pin"
+    echo "check.cfg_mask=$_pmask"
+    echo "check.cfg_libs=$_plibs"
+    echo "check.expected=$(mask_cores "$_pmask" | sed 's/^ //')"
+
+    _sysmask=$(cur_mask | tr -d ' ')
+    _syslibs=$(cur_libs | sed 's/,[[:space:]]*/,/g')
+    echo "check.sysfs_mask=$_sysmask"
+    echo "check.sysfs_libs=$_syslibs"
+
+    _pids=$(pids_of "$_pkg")
+    if [ -z "$_pids" ]; then
+        echo "check.running=0"
+        echo "check.pids="
+        echo "check.threads=0"
+        echo "check.affinity="
+        echo "check.cores_used="
+        echo "check.libs_loaded="
+        echo "check.libs_missing=$(echo "$_plibs" | tr ',' ' ')"
+        if [ "$_sysmask" != "$_pmask" ]; then
+            echo "check.verdict=FAIL"
+            echo "check.msg=Aplikasi tidak jalan dan sysfs mask ($_sysmask) != config ($_pmask). Jalankan app dulu lalu cek lagi."
+        elif [ "$_syslibs" != "$_plibs" ]; then
+            echo "check.verdict=WARN"
+            echo "check.msg=Aplikasi tidak jalan. Sysfs libs beda dari config, dan mode auto baru apply saat app jalan."
+        else
+            echo "check.verdict=OK"
+            echo "check.msg=Aplikasi tidak jalan, tapi sysfs sudah sesuai config. Cek ulang saat app berjalan untuk bukti affinity."
+        fi
+        return 0
+    fi
+
+    echo "check.running=1"
+    echo "check.pids=$_pids"
+
+    _first=$(echo "$_pids" | awk '{print $1}')
+    echo "check.threads=$(thread_count "$_first")"
+    _aff=$(thread_affinity "$_first")
+    echo "check.affinity=$_aff"
+    echo "check.affinity_ok=$(affinity_ok "$_pmask" "$_aff")"
+    echo "check.cores_used=$(thread_cores "$_first" | sed 's/^ //')"
+
+    _loaded=""; _missing=""
+    for _l in $(echo "$_plibs" | tr ',' ' '); do
+        if grep -qs -- "$_l" "/proc/$_first/maps"; then _loaded="$_loaded,$_l"; else _missing="$_missing,$_l"; fi
+    done
+    echo "check.libs_loaded=$(echo "$_loaded" | sed 's/^,//')"
+    echo "check.libs_missing=$(echo "$_missing" | sed 's/^,//')"
+
+    for _c in $(mask_cores "$_pmask"); do
+        _cf=$(cat "/sys/devices/system/cpu/cpu$_c/cpufreq/scaling_cur_freq" 2>/dev/null)
+        _cm=$(cat "/sys/devices/system/cpu/cpu$_c/cpufreq/cpuinfo_max_freq" 2>/dev/null)
+        echo "check.freq.$_c=${_cf:-0}/${_cm:-0}"
+    done
+
+    # verdict
+    _problems=""
+    [ "$_support" = "0" ] && [ "$_pin" != "1" ] && _problems="$_problems kernel-tanpa-patch-sched_lib(pin off)"
+    [ "$_sysmask" != "$_pmask" ] && _problems="$_problems sysfs-mask(${_sysmask:-kosong})-beda-dari-config($_pmask)"
+    [ "$_syslibs" != "$_plibs" ] && _problems="$_problems sysfs-libs-beda-dari-config"
+    [ -n "$_missing" ] && _problems="$_problems lib-belum-load:$(echo "$_missing" | sed 's/^,//')"
+    if [ "$_pin" = "1" ] && [ "$(affinity_ok "$_pmask" "$_aff")" != "1" ]; then
+        _problems="$_problems affinity-di-luar-mask($_aff)"
+    fi
+
+    if [ -z "$_problems" ]; then
+        echo "check.verdict=OK"
+        echo "check.msg=App jalan di core $(echo $(mask_cores "$_pmask")) dan sysfs sesuai config."
+    else
+        echo "check.verdict=WARN"
+        echo "check.msg=$(echo "$_problems" | sed 's/^ //')"
+    fi
+}
+
 # ---------- output for WebUI ----------
 do_dump() {
     ensure
@@ -243,6 +397,7 @@ case "$1" in
                ensure
                grep -v '^app\.' "$CONF" > "$CONF.new" 2>/dev/null && mv "$CONF.new" "$CONF"
                echo "overrides purged" ;;
+    check)     do_check "$2" ;;
     log)       tail -n 40 "$LOG" 2>/dev/null ;;
-    *)         echo "usage: unityfix.sh {dump|status|apply|daemon|cores|installed|setk k v|unsetk k|log|init}" ;;
+    *)         echo "usage: unityfix.sh {dump|status|apply|check [pkg]|daemon|cores|installed|setk k v|unsetk k|log|init}" ;;
 esac
