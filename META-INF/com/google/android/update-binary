@@ -1,0 +1,63 @@
+#!/sbin/sh
+# UnityFix X — universal installer (Magisk / KernelSU / APatch / TWRP)
+# Tidak memakai util_functions.sh supaya jalan di semua manager.
+
+umask 022
+OUTFD=$2
+ZIPFILE=$3
+[ -z "$ZIPFILE" ] && ZIPFILE=$1
+
+MODID=unityfix
+NZ="${NVBASE:-/data/adb}"
+MODPATH="$NZ/modules/$MODID"
+CFG="$NZ/unityfix"
+
+ui_print() { echo "$1"; }
+abort() { echo "! $1"; exit 1; }
+
+mount /data 2>/dev/null
+[ -f "$ZIPFILE" ] || abort "file zip tidak ditemukan: $ZIPFILE"
+
+# --- pilih tool unzip ---
+UNZIP=""
+if command -v unzip >/dev/null 2>&1; then
+    UNZIP="unzip"
+elif command -v busybox >/dev/null 2>&1; then
+    UNZIP="busybox unzip"
+else
+    abort "unzip/busybox tidak tersedia"
+fi
+
+mkdir -p "$MODPATH" 2>/dev/null || abort "gagal membuat $MODPATH"
+
+ui_print "- Mengekstrak ke $MODPATH"
+$UNZIP -o "$ZIPFILE" -x 'META-INF/*' -d "$MODPATH" >/dev/null 2>&1 || abort "ekstraksi gagal"
+
+# marker lama
+rm -f "$MODPATH/remove" "$MODPATH/disable" 2>/dev/null
+
+# permission
+chmod 755 "$MODPATH" 2>/dev/null
+for f in service.sh customize.sh action.sh uninstall.sh bin/unityfix.sh; do
+    [ -f "$MODPATH/$f" ] && chmod 755 "$MODPATH/$f" 2>/dev/null
+done
+[ -d "$MODPATH/bin" ] && chmod 755 "$MODPATH/bin" 2>/dev/null
+chmod 644 "$MODPATH/module.prop" 2>/dev/null
+
+# config persisten
+mkdir -p "$CFG" 2>/dev/null
+if [ -s "$CFG/config.conf" ]; then
+    ui_print "- Config lama dipertahankan"
+else
+    cp -f "$MODPATH/defaults.conf" "$CFG/config.conf" 2>/dev/null
+    ui_print "- Config baru dibuat: $CFG/config.conf"
+fi
+chmod 644 "$CFG/config.conf" 2>/dev/null
+
+# info perangkat + cek kernel
+MODPATH="$MODPATH" sh "$MODPATH/customize.sh" 2>/dev/null
+
+ui_print ""
+ui_print "- Terpasang. Reboot untuk mengaktifkan daemon."
+ui_print "- Atur app & core lewat WebUI modul."
+exit 0

@@ -1,0 +1,12 @@
+# build artifacts
+*.zip
+*.apk
+*.log
+state
+daemon.pid
+last
+
+# editor / os
+.DS_Store
+Thumbs.db
+*.swp

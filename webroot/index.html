@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>UnityFix X</title>
+<style>
+  :root{
+    --bg:#0b0f14; --card:#121821; --card2:#0e141c; --line:#1e2a38;
+    --txt:#e6edf5; --dim:#8b9bb0; --acc:#3ddc97; --acc2:#5aa9ff; --warn:#ffb84d; --bad:#ff5f6d;
+    --r:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.45}
+  body{padding:14px 12px 96px;max-width:720px;margin:0 auto}
+  h1,h2,h3{margin:0;font-weight:600}
+  header{display:flex;align-items:center;gap:10px;margin:2px 2px 14px}
+  header img{width:38px;height:38px;border-radius:10px;object-fit:cover}
+  header .t{flex:1;min-width:0}
+  header .t b{display:block;font-size:17px;letter-spacing:.2px}
+  header .t span{font-size:11.5px;color:var(--dim)}
+  .badge{font-size:11px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);
+    color:var(--dim);white-space:nowrap}
+  .badge.ok{color:#0b0f14;background:var(--acc);border-color:var(--acc);font-weight:600}
+  .badge.no{color:#0b0f14;background:var(--bad);border-color:var(--bad);font-weight:600}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    padding:14px;margin-bottom:12px}
+  .card h2{font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
+  .row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed #1a2534}
+  .row:last-child{border-bottom:0}
+  .row .k{color:var(--dim);font-size:13px;flex:1;min-width:0}
+  .row .v{font-size:13px;font-variant-numeric:tabular-nums;text-align:right;
+    max-width:58%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  /* switch */
+  .sw{position:relative;width:46px;height:27px;flex:0 0 auto}
+  .sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;z-index:2}
+  .sw i{position:absolute;inset:0;background:#26313f;border-radius:999px;transition:.18s}
+  .sw i::after{content:"";position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;
+    background:#8b9bb0;transition:.18s}
+  .sw input:checked + i{background:rgba(61,220,151,.25)}
+  .sw input:checked + i::after{transform:translateX(19px);background:var(--acc)}
+  /* segmented */
+  .seg{display:flex;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px}
+  .seg button{flex:1;background:transparent;border:0;color:var(--dim);padding:9px 6px;border-radius:9px;
+    font-size:13px;font-weight:600;transition:.15s}
+  .seg button.on{background:#1d2b3c;color:var(--txt);box-shadow:inset 0 0 0 1px #2b3d52}
+  /* inputs */
+  input[type=text],input[type=number],select{
+    width:100%;background:var(--card2);border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:10px 11px;font-size:14px;outline:none}
+  input:focus,select:focus{border-color:#2f4a66}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .lbl{font-size:11.5px;color:var(--dim);margin:0 0 5px 2px;display:block}
+  /* chips */
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:#16202c;border:1px solid var(--line);
+    color:var(--txt);border-radius:999px;padding:6px 11px;font-size:12.5px}
+  .chip b{font-weight:600}
+  .chip.x{cursor:pointer}
+  .chip.x span{color:var(--dim);font-size:14px;line-height:1}
+  .chip.pick{cursor:pointer;color:var(--dim)}
+  .chip.pick:active{border-color:var(--acc2)}
+  .chip.off{opacity:.55}
+  button.act{background:#16202c;border:1px solid var(--line);color:var(--txt);border-radius:11px;
+    padding:11px 14px;font-size:13.5px;font-weight:600}
+  button.act:active{transform:scale(.985)}
+  button.acc{background:var(--acc);border-color:var(--acc);color:#07110c}
+  button.ghost{background:transparent}
+  /* cores */
+  .corebar{display:flex;gap:4px;flex-wrap:wrap;margin-top:10px}
+  .core{font-size:10.5px;font-variant-numeric:tabular-nums;padding:5px 7px;border-radius:7px;
+    background:#16202c;border:1px solid var(--line);color:var(--dim)}
+  .core.on{background:rgba(61,220,151,.16);border-color:rgba(61,220,151,.5);color:var(--acc)}
+  /* app rows */
+  .app{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px 11px;
+    margin-bottom:8px}
+  .app .top{display:flex;align-items:center;gap:9px}
+  .app .pkg{flex:1;min-width:0;font-size:13px;font-family:ui-monospace,Menlo,monospace;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .app .del{background:transparent;border:0;color:var(--bad);font-size:17px;padding:0 3px}
+  .app .ov{margin-top:9px;padding-top:9px;border-top:1px dashed #1a2534;display:none}
+  .app.open .ov{display:block}
+  .app .gear{background:transparent;border:0;color:var(--dim);font-size:15px;padding:0 4px}
+  .hit{display:flex;justify-content:space-between;align-items:center;padding:10px 11px;
+    border:1px solid var(--line);border-radius:11px;margin-bottom:7px;background:var(--card2)}
+  .hit span{font-size:12.5px;font-family:ui-monospace,Menlo,monospace;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .hit button{background:rgba(90,169,255,.14);border:1px solid rgba(90,169,255,.35);color:var(--acc2);
+    border-radius:9px;padding:6px 11px;font-size:12px;font-weight:600}
+  /* save bar */
+  .savebar{position:fixed;left:0;right:0;bottom:0;padding:11px 12px calc(11px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,rgba(11,15,20,0) 0%,rgba(11,15,20,.92) 32%,#0b0f14 100%);
+    display:flex;gap:9px;max-width:720px;margin:0 auto}
+  .savebar button{flex:1;padding:14px;border-radius:13px;border:0;font-size:15px;font-weight:700}
+  #save{background:var(--acc);color:#07110c}
+  #applyNow{flex:0 0 auto;background:#1d2b3c;color:var(--txt);border:1px solid var(--line);padding:14px 16px}
+  /* log */
+  pre{background:#070b10;border:1px solid var(--line);border-radius:11px;padding:10px;
+    font-size:11px;line-height:1.5;color:#9fb3c8;max-height:190px;overflow:auto;margin:8px 0 0;
+    white-space:pre-wrap;word-break:break-word}
+  #toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,20px);opacity:0;
+    background:#e6edf5;color:#0b0f14;padding:11px 16px;border-radius:11px;font-size:13px;font-weight:600;
+    pointer-events:none;transition:.22s;z-index:50;max-width:88%;text-align:center}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+  #toast.err{background:var(--bad);color:#fff}
+  .muted{color:var(--dim);font-size:12.5px}
+  .warnbox{border-color:rgba(255,184,77,.45);background:rgba(255,184,77,.08)}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="lean.png" alt="">
+  <div class="t">
+    <b>UnityFix X</b>
+    <span>multi-app CPU report fix · eLSanz fork</span>
+  </div>
+  <div id="badge" class="badge">loading…</div>
+</header>
+
+<div id="nobridge" class="card warnbox hidden">
+  <h2>Shell tidak tersedia</h2>
+  <div class="muted">Halaman ini harus dibuka dari <b>WebUI manager</b> (KernelSU / APatch / MMRL).
+  Di browser biasa tidak ada akses root, jadi tombol simpan tidak berfungsi.</div>
+</div>
+
+<!-- STATUS -->
+<div class="card">
+  <h2>Status</h2>
+  <div class="row"><div class="k">Dukungan kernel</div><div class="v" id="stSup">–</div></div>
+  <div class="row"><div class="k">Mask aktif / libs</div><div class="v mono" id="stCur">–</div></div>
+  <div class="row"><div class="k">Target terdeteksi</div><div class="v mono" id="stApp">–</div></div>
+  <div class="row"><div class="k">Daemon</div><div class="v" id="stDae">–</div></div>
+  <div class="row"><div class="k">Aksi terakhir</div><div class="v mono" id="stLast">–</div></div>
+</div>
+
+<!-- MASTER -->
+<div class="card">
+  <h2>Kontrol utama</h2>
+  <div class="row">
+    <div class="k"><b>Aktifkan modul</b><br><span class="muted">mati = setting kernel dibersihkan</span></div>
+    <label class="sw"><input type="checkbox" id="enabled"><i></i></label>
+  </div>
+  <div style="margin-top:12px">
+    <span class="lbl">Mode kerja</span>
+    <div class="seg" id="modeSeg">
+      <button data-mode="auto" class="on">Auto — hanya app terpilih</button>
+      <button data-mode="always">Selalu — semua app</button>
+    </div>
+  </div>
+  <div class="grid2" style="margin-top:12px">
+    <div>
+      <span class="lbl">Interval cek (detik)</span>
+      <input type="number" id="interval" min="3" max="120" step="1">
+    </div>
+    <div>
+      <span class="lbl">Pin affinity (taskset)</span>
+      <div class="row" style="border:0;padding:5px 0">
+        <div class="k muted" id="pinHint">untuk kernel tanpa patch</div>
+        <label class="sw"><input type="checkbox" id="pin"><i></i></label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CORES -->
+<div class="card">
+  <h2>Core yang dipakai</h2>
+  <div class="chips" id="presets"></div>
+  <div class="corebar" id="corebar"></div>
+  <div class="grid2" style="margin-top:12px">
+    <div>
+      <span class="lbl">Mask manual (desimal / 0x hex)</span>
+      <input type="text" id="maskInput" inputmode="numeric" placeholder="240">
+    </div>
+    <div>
+      <span class="lbl">Nilai terbaca</span>
+      <input type="text" id="maskRead" readonly value="–">
+    </div>
+  </div>
+  <div class="muted" style="margin-top:9px">bit0 = cpu0. contoh: 255 = semua core, 240 = cpu4-7, 192 = cpu6-7.</div>
+</div>
+
+<!-- LIBS -->
+<div class="card">
+  <h2>Library yang di-hook</h2>
+  <div class="chips" id="libsChips"></div>
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <input type="text" id="libInput" placeholder="libbaru.so">
+    <button class="act" id="libAdd" style="flex:0 0 auto">+</button>
+  </div>
+  <div class="chips" id="libSuggest" style="margin-top:10px"></div>
+</div>
+
+<!-- APPS -->
+<div class="card">
+  <h2>App target (mode auto)</h2>
+  <div id="appsList"></div>
+  <div style="display:flex;gap:8px;margin-top:10px">
+    <input type="text" id="pkgInput" placeholder="com.paket.game">
+    <button class="act" id="pkgAdd" style="flex:0 0 auto">+</button>
+  </div>
+  <div style="margin-top:12px">
+    <input type="text" id="appSearch" placeholder="cari app terpasang…">
+    <div id="appHits" style="margin-top:9px;max-height:260px;overflow:auto"></div>
+  </div>
+  <div class="muted" style="margin-top:9px">
+    Pilih app = berlaku global (libs+mask). Tombol ⚙ = override khusus app itu.
+  </div>
+</div>
+
+<!-- LOG -->
+<div class="card">
+  <h2>Log</h2>
+  <pre id="log">–</pre>
+</div>
+
+<div class="savebar">
+  <button id="applyNow">Apply</button>
+  <button id="save">Simpan &amp; Jalankan</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+  var CMD = "/data/adb/unityfix/bin/unityfix.sh";
+  var ORDER_LIBS = ["libunity.so","libil2cpp.so","libmonobdwgc-2.0.so","libmain.so","libUE4.so",
+                    "libfb.so","libflutter.so","libcocos2dcpp.so","libcocos2djs.so","libgodot_android.so",
+                    "libgamedot.so","libslotgame.so","libapp.so"];
+
+  var S = {
+    enabled: true, mode: "auto", interval: 8, mask: 240, pin: false,
+    libs: [], apps: [], overrides: {},
+    cores: [], installed: [], support: false, ready: false
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  if (!window.CSS) window.CSS = {};
+  if (!CSS.escape) CSS.escape = function (s) { return String(s).replace(/[^a-zA-Z0-9_.-]/g, "\\$&"); };
+  var esc = function (s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+    });
+  };
+  var q = function (s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; };
+
+  /* ---------- shell bridge ---------- */
+  function shExec(cmd) {
+    return new Promise(function (resolve, reject) {
+      var br = (window.ksu && window.ksu.exec) ? window.ksu
+             : (window.apatch && window.apatch.exec) ? window.apatch
+             : (window.ksud && window.ksud.exec) ? window.ksud : null;
+      if (!br) { reject(new Error("nobridge")); return; }
+      var done = false;
+      var cb = function (errno, stdout, stderr) {
+        if (done) return; done = true;
+        resolve({ errno: errno || 0, out: stdout || "", err: stderr || "" });
+      };
+      var r;
+      try { r = br.exec(cmd, cb); } catch (e) { reject(e); return; }
+      if (r && typeof r.then === "function") {
+        r.then(function (x) {
+          if (done) return; done = true;
+          resolve({ errno: (x && x.errno) || 0, out: (x && x.stdout) || "", err: (x && x.stderr) || "" });
+        }).catch(reject);
+      }
+    });
+  }
+  function run(cmd) { return shExec(cmd).then(function (r) { return r.out || ""; }); }
+  function runq() { return run([].slice.call(arguments).join(" ")); }
+
+  var toastT;
+  function toast(msg, isErr) {
+    var t = $("toast");
+    t.textContent = msg;
+    t.className = "show" + (isErr ? " err" : "");
+    clearTimeout(toastT);
+    toastT = setTimeout(function () { t.className = ""; }, 2200);
+  }
+
+  /* ---------- model helpers ---------- */
+  function coresOfMask(m) {
+    var out = [];
+    for (var i = 0; i < S.cores.length; i++) if (m & (1 << S.cores[i].id)) out.push(S.cores[i].id);
+    return out;
+  }
+  function maskOfCores(ids) {
+    var m = 0;
+    ids.forEach(function (i) { m += Math.pow(2, i); });
+    return m;
+  }
+  function clusters() {
+    // kelompokkan core berurutan dengan freq sama
+    var g = [], cur = null;
+    S.cores.forEach(function (c) {
+      if (cur && cur.freq === c.freq) { cur.ids.push(c.id); }
+      else { cur = { freq: c.freq, ids: [c.id] }; g.push(cur); }
+    });
+    return g;
+  }
+  function validMask(m, n) {
+    if (typeof m !== "number" || isNaN(m) || m <= 0) return false;
+    var max = Math.pow(2, n) - 1;
+    if (m > max) return false;
+    for (var i = 0; i < n; i++) if ((m & (1 << i)) && i >= n) return false;
+    return true;
+  }
+
+  /* ---------- render ---------- */
+  function renderStatus(cfg) {
+    var b = $("badge");
+    if (S.support) { b.className = "badge ok"; b.textContent = "kernel OK"; }
+    else { b.className = "badge no"; b.textContent = "kernel N/A"; }
+    $("stSup").textContent = S.support ? "didukung (sched_lib_*)" : "tidak ada — pakai pin affinity";
+    $("stCur").textContent = (cfg.rt_cur_mask || "–") + " / " + (cfg.rt_cur_libs || "–");
+    $("stApp").textContent = cfg.rt_state_app || "–";
+    $("stDae").textContent = cfg.rt_daemon === "1" ? "jalan" : "berhenti";
+    $("stLast").textContent = cfg.rt_applied || "–";
+  }
+
+  function renderMask() {
+    var bar = $("corebar");
+    bar.innerHTML = S.cores.map(function (c) {
+      var on = (S.mask & (1 << c.id)) ? " on" : "";
+      var mhz = c.freq ? Math.round(c.freq / 1000) + "M" : "?";
+      return '<div class="core' + on + '">cpu' + c.id + " · " + mhz + "</div>";
+    }).join("");
+
+    var cl = clusters(), top = cl[cl.length - 1] || { ids: [] };
+    var presets = [
+      { label: "Semua (" + S.cores.length + ")", ids: S.cores.map(function (c) { return c.id; }) },
+      { label: "Big " + top.ids.length, ids: top.ids },
+      { label: "Top 2", ids: S.cores.slice(-2).map(function (c) { return c.id; }) }
+    ];
+    var seenMask = {};
+    presets = presets.filter(function (p) {
+      var mv = maskOfCores(p.ids);
+      if (!mv || seenMask[mv]) return false;
+      seenMask[mv] = 1;
+      return true;
+    });
+    $("presets").innerHTML = presets.map(function (p, i) {
+      var m = maskOfCores(p.ids);
+      var on = (m === S.mask);
+      return '<button class="chip pick' + (on ? "" : " off") + '" data-preset="' + i + '">' +
+             esc(p.label) + ' <b>' + m + "</b></button>";
+    }).join("");
+    $("presets").querySelectorAll("[data-preset]").forEach(function (el) {
+      el.onclick = function () {
+        var p = presets[+el.getAttribute("data-preset")];
+        S.mask = maskOfCores(p.ids);
+        renderMask();
+      };
+    });
+
+    $("maskInput").value = S.mask;
+    var ids = coresOfMask(S.mask);
+    $("maskRead").value = ids.length ? "cpu " + ids.join(",") : "tidak valid";
+  }
+
+  function renderLibs() {
+    var box = $("libsChips");
+    box.innerHTML = S.libs.map(function (l) {
+      return '<span class="chip x" data-lib="' + esc(l) + '"><b>' + esc(l) +
+             '</b><span>×</span></span>';
+    }).join("") || '<span class="muted">belum ada library</span>';
+    box.querySelectorAll("[data-lib]").forEach(function (el) {
+      el.onclick = function () {
+        var l = el.getAttribute("data-lib");
+        S.libs = S.libs.filter(function (x) { return x !== l; });
+        renderLibs();
+      };
+    });
+
+    var sugg = ORDER_LIBS.filter(function (l) { return S.libs.indexOf(l) < 0; });
+    $("libSuggest").innerHTML = sugg.map(function (l) {
+      return '<span class="chip pick off" data-sugg="' + esc(l) + '">+ ' + esc(l) + "</span>";
+    }).join("");
+    $("libSuggest").querySelectorAll("[data-sugg]").forEach(function (el) {
+      el.onclick = function () {
+        var l = el.getAttribute("data-sugg");
+        if (S.libs.indexOf(l) < 0) S.libs.push(l);
+        renderLibs();
+      };
+    });
+  }
+
+  function renderApps() {
+    var box = $("appsList");
+    if (!S.apps.length) {
+      box.innerHTML = '<div class="muted">belum ada app target</div>';
+    } else {
+      box.innerHTML = S.apps.map(function (p) {
+        var ov = S.overrides[p] || {};
+        var open = ov.__open ? " open" : "";
+        var maskVal = ov.mask || "";
+        var libsVal = ov.libs || "";
+        return '<div class="app' + open + '" data-pkg="' + esc(p) + '">' +
+          '<div class="top">' +
+            '<div class="pkg">' + esc(p) + "</div>" +
+            '<button class="gear" data-gear="' + esc(p) + '">⚙</button>' +
+            '<button class="del" data-del="' + esc(p) + '">×</button>' +
+          "</div>" +
+          '<div class="ov">' +
+            '<span class="lbl">Mask khusus (kosong = global ' + S.mask + ")</span>" +
+            '<input type="text" data-ovmask="' + esc(p) + '" inputmode="numeric" placeholder="' +
+              esc(String(S.mask)) + '" value="' + esc(maskVal) + '">' +
+            '<span class="lbl" style="margin-top:9px">Libs khusus (kosong = global)</span>' +
+            '<input type="text" data-ovlibs="' + esc(p) + '" placeholder="' +
+              esc(S.libs.join(",")) + '" value="' + esc(libsVal) + '">' +
+          "</div>" +
+        "</div>";
+      }).join("");
+    }
+
+    box.querySelectorAll("[data-del]").forEach(function (el) {
+      el.onclick = function () {
+        var p = el.getAttribute("data-del");
+        S.apps = S.apps.filter(function (x) { return x !== p; });
+        delete S.overrides[p];
+        renderApps();
+      };
+    });
+    box.querySelectorAll("[data-gear]").forEach(function (el) {
+      el.onclick = function () {
+        var p = el.getAttribute("data-gear");
+        var card = box.querySelector('[data-pkg="' + CSS.escape(p) + '"]');
+        card.classList.toggle("open");
+      };
+    });
+    box.querySelectorAll("[data-ovmask]").forEach(function (el) {
+      el.oninput = function () {
+        var p = el.getAttribute("data-ovmask");
+        S.overrides[p] = S.overrides[p] || {};
+        var v = el.value.trim();
+        if (!v) delete S.overrides[p].mask;
+        else {
+          var n = v.indexOf("0x") === 0 ? parseInt(v, 16) : parseInt(v, 10);
+          if (!isNaN(n)) S.overrides[p].mask = n;
+        }
+      };
+    });
+    box.querySelectorAll("[data-ovlibs]").forEach(function (el) {
+      el.oninput = function () {
+        var p = el.getAttribute("data-ovlibs");
+        S.overrides[p] = S.overrides[p] || {};
+        var v = el.value.trim();
+        if (!v) delete S.overrides[p].libs;
+        else S.overrides[p].libs = v;
+      };
+    });
+  }
+
+  function renderSearch() {
+    var term = $("appSearch").value.trim().toLowerCase();
+    var hits = S.installed.filter(function (p) {
+      return !term || p.toLowerCase().indexOf(term) >= 0;
+    }).slice(0, 40);
+    $("appHits").innerHTML = hits.map(function (p) {
+      var added = S.apps.indexOf(p) >= 0;
+      return '<div class="hit"><span>' + esc(p) + "</span>" +
+        (added ? '<button disabled style="opacity:.4">ada</button>'
+               : '<button data-add="' + esc(p) + '">+ tambah</button>') + "</div>";
+    }).join("") || '<div class="muted">tidak ada hasil</div>';
+    $("appHits").querySelectorAll("[data-add]").forEach(function (el) {
+      el.onclick = function () {
+        var p = el.getAttribute("data-add");
+        if (S.apps.indexOf(p) < 0) S.apps.push(p);
+        renderApps(); renderSearch();
+      };
+    });
+  }
+
+  /* ---------- config io ---------- */
+  function applyConfig(cfg) {
+    S.support = cfg.rt_support === "1";
+    S.enabled = cfg.enabled !== "0";
+    S.mode = cfg.mode === "always" ? "always" : "auto";
+    S.interval = parseInt(cfg.interval, 10) || 8;
+    S.mask = parseInt(cfg.mask, 10) || 240;
+    S.pin = cfg.pin === "1";
+    S.libs = (cfg.libs || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+    S.apps = (cfg.apps || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+    S.overrides = {};
+    Object.keys(cfg).forEach(function (k) {
+      var m = k.match(/^app\.(.+)\.(mask|libs)$/);
+      if (!m) return;
+      S.overrides[m[1]] = S.overrides[m[1]] || {};
+      S.overrides[m[1]][m[2]] = m[2] === "mask" ? parseInt(cfg[k], 10) : cfg[k];
+      if (S.apps.indexOf(m[1]) < 0) S.apps.push(m[1]);
+    });
+
+    $("enabled").checked = S.enabled;
+    $("pin").checked = S.pin;
+    $("interval").value = S.interval;
+    Array.prototype.forEach.call($("modeSeg").children, function (b) {
+      b.classList.toggle("on", b.getAttribute("data-mode") === S.mode);
+    });
+  }
+
+  function parseDump(txt) {
+    var cfg = {}, lines = (txt || "").split("\n");
+    lines.forEach(function (line) {
+      var i = line.indexOf("=");
+      if (i < 1) return;
+      var k = line.slice(0, i).trim(), v = line.slice(i + 1);
+      cfg[k.replace(/^rt\./, "rt_")] = v;
+    });
+    return cfg;
+  }
+
+  function loadAll() {
+    return runq(CMD, "dump").then(function (txt) {
+      if (!txt || txt.indexOf("=") < 0) throw new Error("config kosong — modul belum terpasang?");
+      applyConfig(parseDump(txt));
+      return runq(CMD, "cores");
+    }).then(function (txt) {
+      S.cores = (txt || "").split("\n").filter(Boolean).map(function (l) {
+        var p = l.trim().split(/\s+/);
+        return { id: parseInt(p[0], 10), freq: parseInt(p[1], 10) || 0 };
+      }).filter(function (c) { return !isNaN(c.id); });
+      if (!S.cores.length) S.cores = [0,1,2,3,4,5,6,7].map(function (i) { return { id: i, freq: 0 }; });
+      S.ready = true;
+      renderMask(); renderLibs(); renderApps();
+      return runq(CMD, "dump");
+    }).then(function (txt) {
+      renderStatus(parseDump(txt));
+    });
+  }
+
+  function loadInstalled() {
+    if (S.installed.length) { renderSearch(); return Promise.resolve(); }
+    return runq(CMD, "installed").then(function (txt) {
+      S.installed = (txt || "").split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
+      renderSearch();
+    }).catch(function () {});
+  }
+
+  function loadLog() {
+    return runq(CMD, "log").then(function (t) { $("log").textContent = t || "(kosong)"; })
+      .catch(function () {});
+  }
+
+  function save() {
+    var mask = parseInt($("maskInput").value, 10);
+    if (isNaN(mask) || mask <= 0) { toast("mask tidak valid", true); return Promise.resolve(); }
+    S.mask = mask;
+    var iv = parseInt($("interval").value, 10) || 8;
+    if (iv < 3) iv = 3;
+    S.interval = iv;
+
+    var cmds = [
+      "setk enabled " + (S.enabled ? 1 : 0),
+      "setk mode " + S.mode,
+      "setk interval " + S.interval,
+      "setk mask " + S.mask,
+      "setk pin " + (S.pin ? 1 : 0),
+      "setk libs " + q(S.libs.join(",")),
+      "setk apps " + q(S.apps.join(","))
+    ];
+    // override: tulis yang ada, hapus sisanya
+    var keep = {};
+    S.apps.forEach(function (p) {
+      var ov = S.overrides[p] || {};
+      if (ov.mask) { cmds.push("setk " + q("app." + p + ".mask") + " " + ov.mask); keep["app." + p + ".mask"] = 1; }
+      if (ov.libs) { cmds.push("setk " + q("app." + p + ".libs") + " " + q(ov.libs)); keep["app." + p + ".libs"] = 1; }
+    });
+    Object.keys(S.overrides).forEach(function (p) {
+      if (S.apps.indexOf(p) >= 0) return;
+      cmds.push("unsetk " + q("app." + p + ".mask"));
+      cmds.push("unsetk " + q("app." + p + ".libs"));
+    });
+
+    var chain = cmds.map(function (c) { return q(CMD) + " " + c; }).join(" && ");
+    return run(chain).then(function () { return runq(CMD, "apply"); })
+      .then(function (out) {
+        toast(String(out || "tersimpan").split("\n")[0] || "tersimpan");
+        return loadAll();
+      })
+      .then(loadLog);
+  }
+
+  /* ---------- events ---------- */
+  function bind() {
+    $("modeSeg").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-mode]");
+      if (!b) return;
+      S.mode = b.getAttribute("data-mode");
+      Array.prototype.forEach.call($("modeSeg").children, function (x) {
+        x.classList.toggle("on", x === b);
+      });
+    });
+    $("enabled").onchange = function () { S.enabled = this.checked; };
+    $("pin").onchange = function () { S.pin = this.checked; };
+    $("maskInput").oninput = function () {
+      var v = this.value.trim();
+      var n = v.indexOf("0x") === 0 || v.indexOf("0X") === 0 ? parseInt(v, 16) : parseInt(v, 10);
+      if (!isNaN(n) && n > 0 && n <= 65535) { S.mask = n; renderMask(); }
+    };
+    $("libAdd").onclick = function () {
+      var v = $("libInput").value.trim();
+      if (!v) return;
+      if (S.libs.indexOf(v) < 0) S.libs.push(v);
+      $("libInput").value = "";
+      renderLibs();
+    };
+    $("pkgAdd").onclick = function () {
+      var v = $("pkgInput").value.trim();
+      if (!/^[a-zA-Z0-9._]+$/.test(v)) { toast("nama paket tidak valid", true); return; }
+      if (S.apps.indexOf(v) < 0) S.apps.push(v);
+      $("pkgInput").value = "";
+      renderApps();
+    };
+    $("appSearch").oninput = function () { renderSearch(); };
+    $("save").onclick = function () {
+      if (!S.ready) { toast("belum siap", true); return; }
+      save().catch(function (e) { toast("gagal: " + e.message, true); });
+    };
+    $("applyNow").onclick = function () {
+      runq(CMD, "apply").then(function (o) {
+        toast(String(o).trim() || "applied");
+        return loadAll();
+      }).then(loadLog).catch(function (e) { toast("gagal: " + e.message, true); });
+    };
+  }
+
+  /* ---------- boot ---------- */
+  bind();
+  loadAll().then(function () {
+    $("nobridge").classList.add("hidden");
+    loadInstalled();
+    loadLog();
+  }).catch(function (e) {
+    if (e.message === "nobridge") {
+      $("nobridge").classList.remove("hidden");
+      $("badge").className = "badge no"; $("badge").textContent = "no root";
+    } else {
+      toast(e.message, true);
+    }
+  });
+})();
+</script>
+</body>
+</html>
