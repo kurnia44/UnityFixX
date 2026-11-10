@@ -45,9 +45,6 @@ else
     echo "· Kernel sched_lib : $SUP"
 fi
 echo ""
-echo "· Topologi CPU (auto-detect):"
-UF_DIR="$UF" /system/bin/sh "$MODPATH/bin/unityfix.sh" clusters 2>/dev/null | sed 's/^/  /'
-echo ""
 echo "· Buka WebUI dari manager (KernelSU/APatch/MMRL) untuk atur app & core."
 echo "+ fork by eLSanz · original @LeanHijosdesusMadres"
 echo ""
