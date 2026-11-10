@@ -1,4 +1,4 @@
-# UnityFix X — v10-multi
+# UnityFix X — v11-auto
 
 Fork of **UnityFix** by [@LeanHijosdesusMadres](https://t.me/modulostk), rebuilt by **eLSanz (@Reichtw)**.
 
@@ -18,6 +18,11 @@ Yang baru di fork ini:
 - **Pin affinity (taskset)** — untuk kernel yang tidak punya patch `sched_lib_mask_force`,
   modul tetap bisa memaksa pinning core ke proses app target.
 - **Config persisten** di `/data/adb/unityfix/config.conf` (tidak hilang saat update modul).
+- **Auto-detect topologi CPU (v11).** Tidak ada lagi mask hardcoded `240` yang cuma cocok buat
+  SoC lama 4+3+1. Modul baca `cpuinfo_max_freq` tiap core, kelompokkan jadi cluster, lalu pilih:
+  - ada cluster kecil (≤65% freq max, ≥2 core) → cluster itu dibuang, sisanya dipakai;
+  - tidak ada cluster kecil (mis. Snapdragon 8 Elite: 6×3.53GHz + 2×4.32GHz) → **semua core**,
+    karena memaksa 2 prime core saja malah bikin panas dan fps sustained jatuh.
 
 ## Instal
 
@@ -26,22 +31,38 @@ Yang baru di fork ini:
 3. Buka **WebUI modul** dari manager (KernelSU → Modules → UnityFix X → buka / ikon web).
 
 Kalau manager tidak punya WebUI (Magisk biasa), tombol **Action** di kartu modul membuka menu
-terminal cepat (Vol+ semua core, Vol- 4 core besar, layar 2 core besar).
+terminal cepat (Vol+ auto-detect, Vol- semua core, layar big cluster).
 
 ## Mask core
 
-Nilai desimal, `bit0 = cpu0`.
+Nilai bisa **symbol** (disarankan) atau desimal (`bit0 = cpu0`).
+
+| Symbol | Arti |
+|--------|------|
+| `auto` | default — ikut topologi SoC (lihat aturan di atas) |
+| `all`  | semua core |
+| `big`  | semua core kecuali cluster kecil |
+| `prime`| hanya cluster freq tertinggi |
+| `top4` / `top2` | 4 / 2 core tercepat |
 
 | Mask | Core | Keterangan |
 |------|------|------------|
 | 255 | 0-7 | semua core |
-| 240 | 4-7 | 4 core besar (default) |
+| 240 | 4-7 | 4 core besar (default lama, tetap valid) |
 | 192 | 6-7 | 2 core besar |
 | 15  | 0-3 | 4 core kecil |
 | 128 | 7 | 1 core terbesar |
 
-WebUI menghitung sendiri dari topologi HP kamu (`cpuinfo_max_freq`), jadi preset "Big N"
-selalu sesuai jumlah core perangkat.
+Config lama yang masih `mask=240` otomatis dimigrasi ke `mask=auto` sekali saat boot pertama
+setelah update (ditandai `cfgschema=2` di config). Kalau sengaja mau 240, set ulang manual.
+
+Lihat topologi yang terdeteksi + semua mask yang tersedia:
+
+```
+sh /data/adb/unityfix/bin/unityfix.sh clusters
+sh /data/adb/unityfix/bin/unityfix.sh clusters big
+sh /data/adb/unityfix/bin/unityfix.sh resolve auto
+```
 
 ## Struktur
 

@@ -5,12 +5,17 @@ UFS=/data/adb/modules/unityfix/bin/unityfix.sh
 [ -x "$UFS" ] || UFS="$UF/bin/unityfix.sh"
 NCPU=$(nproc 2>/dev/null); [ -z "$NCPU" ] && NCPU=8
 
-mask_range() { # $1 first core $2 count
-    awk -v s="$1" -v c="$2" 'BEGIN{m=0; for(i=s;i<s+c;i++) m+=2^i; printf "%d", m}'
-}
-ALL=$(mask_range 0 "$NCPU")
-BIG4=$(mask_range $(( NCPU > 4 ? NCPU-4 : 0 )) $(( NCPU > 4 ? 4 : NCPU )))
-BIG2=$(mask_range $(( NCPU-2 )) 2)
+# semua mask diambil dari auto-detect topologi di bin/unityfix.sh
+sh "$UFS" init >/dev/null 2>&1
+AUTO=$(sh "$UFS" resolve auto 2>/dev/null)
+ALL=$(sh "$UFS" resolve all 2>/dev/null)
+BIG=$(sh "$UFS" resolve big 2>/dev/null)
+PRIME=$(sh "$UFS" resolve prime 2>/dev/null)
+[ -z "$ALL" ] && ALL=$(awk -v c="$NCPU" 'BEGIN{printf "%d", 2^c-1}')
+[ -z "$BIG" ] && BIG="$ALL"
+[ -z "$AUTO" ] && AUTO="$ALL"
+[ -z "$PRIME" ] && PRIME="$AUTO"
+now() { sh "$UFS" resolve "$1" 2>/dev/null; }
 
 echo "============================="
 echo "▒█░▒█ █▀▀▄ ░▀░ ▀▀█▀▀ █░░█ ▒█▀▀▀ ░▀░ █░█ "
@@ -29,9 +34,9 @@ echo ""
 echo "Cara lengkap: buka WebUI modul di KernelSU / APatch / MMRL."
 echo ""
 echo "[?] Aksi cepat (10 detik):"
-echo " • Vol+  = semua core  [$ALL]"
-echo " • Vol-  = 4 core besar [$BIG4]"
-echo " • Layar = 2 core besar [$BIG2]"
+echo " • Vol+  = auto (deteksi topologi) [$AUTO]"
+echo " • Vol-  = semua core              [$ALL]"
+echo " • Layar = big cluster             [$BIG]"
 echo " • Diam  = apply setting tersimpan"
 echo ""
 
@@ -57,9 +62,9 @@ case "$LINE" in
 esac
 
 case "$ACT" in
-    volup)   sh "$UFS" setk mask "$ALL";   echo "[>] mask diset ke $ALL (semua core)" ;;
-    voldown) sh "$UFS" setk mask "$BIG4";  echo "[>] mask diset ke $BIG4 (4 core besar)" ;;
-    touch)   sh "$UFS" setk mask "$BIG2";  echo "[>] mask diset ke $BIG2 (2 core besar)" ;;
+    volup)   sh "$UFS" setk mask auto; echo "[>] mask diset ke auto ($AUTO = $(now auto))" ;;
+    voldown) sh "$UFS" setk mask all;  echo "[>] mask diset ke semua core ($ALL)" ;;
+    touch)   sh "$UFS" setk mask big;  echo "[>] mask diset ke big cluster ($BIG)" ;;
     *)       echo "[>] tidak ada input, pakai setting tersimpan" ;;
 esac
 

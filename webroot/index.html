@@ -173,17 +173,18 @@
   <h2>Core yang dipakai</h2>
   <div class="chips" id="presets"></div>
   <div class="corebar" id="corebar"></div>
+  <div class="muted mono" id="topoLine" style="margin-top:8px"></div>
   <div class="grid2" style="margin-top:12px">
     <div>
-      <span class="lbl">Mask manual (desimal / 0x hex)</span>
-      <input type="text" id="maskInput" inputmode="numeric" placeholder="240">
+      <span class="lbl">Mask (auto / all / big / prime / top4 / top2 / desimal)</span>
+      <input type="text" id="maskInput" placeholder="auto">
     </div>
     <div>
       <span class="lbl">Nilai terbaca</span>
       <input type="text" id="maskRead" readonly value="–">
     </div>
   </div>
-  <div class="muted" style="margin-top:9px">bit0 = cpu0. contoh: 255 = semua core, 240 = cpu4-7, 192 = cpu6-7.</div>
+  <div class="muted" style="margin-top:9px">auto = ikut topologi SoC. bit0 = cpu0. contoh: 255 = semua core, 240 = cpu4-7, 192 = cpu6-7.</div>
 </div>
 
 <!-- LIBS -->
@@ -252,7 +253,7 @@
                     "libgamedot.so","libslotgame.so","libapp.so"];
 
   var S = {
-    enabled: true, mode: "auto", interval: 8, mask: 240, pin: false,
+    enabled: true, mode: "auto", interval: 8, mask: 0, maskRaw: "auto", pin: false,
     libs: [], apps: [], overrides: {},
     cores: [], installed: [], support: false, ready: false
   };
@@ -329,6 +330,57 @@
     return true;
   }
 
+  /* ---------- deteksi cluster (mirror logika bin/unityfix.sh) ---------- */
+  function freqGroups() {
+    var by = {}, out = [];
+    S.cores.forEach(function (c) {
+      if (!by[c.freq]) { by[c.freq] = { freq: c.freq, ids: [] }; out.push(by[c.freq]); }
+      by[c.freq].ids.push(c.id);
+    });
+    out.sort(function (a, b) { return a.freq - b.freq; });
+    return out;
+  }
+  function allMask() { return maskOfCores(S.cores.map(function (c) { return c.id; })); }
+  function autoMask() {
+    var g = freqGroups();
+    var all = allMask();
+    if (g.length < 2) return all;
+    var lo = g[0], hi = g[g.length - 1];
+    if (lo.freq > 0 && hi.freq > 0 && lo.freq * 100 <= hi.freq * 65 &&
+        lo.ids.length >= 2 && S.cores.length >= 8) {
+      return all - maskOfCores(lo.ids);
+    }
+    return all;
+  }
+  function maskForSymbol(sym) {
+    var s = String(sym == null ? "" : sym).trim().toLowerCase();
+    var g = freqGroups();
+    var all = allMask();
+    var hi = g.length ? g[g.length - 1] : { ids: [] };
+    var desc = S.cores.slice().sort(function (a, b) { return (b.freq - a.freq) || (b.id - a.id); });
+    var topN = function (k) { return maskOfCores(desc.slice(0, k).map(function (c) { return c.id; })); };
+    if (/^[0-9]+$/.test(s)) return parseInt(s, 10);
+    if (/^0x[0-9a-f]+$/.test(s)) return parseInt(s.slice(2), 16);
+    switch (s) {
+      case "all": case "max": case "full": return all;
+      case "big": case "perf": return g.length > 1 ? all - maskOfCores(g[0].ids) : all;
+      case "prime": case "top": return maskOfCores(hi.ids);
+      case "top4": case "big4": return topN(4);
+      case "top2": case "big2": return topN(2);
+      default: return autoMask();
+    }
+  }
+  function symLabel(sym) {
+    var m = maskForSymbol(sym);
+    var n = coresOfMask(m).length;
+    var s = String(sym || "").toLowerCase();
+    if (s === "auto" || s === "") return "auto " + m + " (" + n + " core)";
+    if (s === "all") return "semua " + m;
+    if (s === "big") return "big " + m + " (" + n + ")";
+    if (s === "prime") return "prime " + m + " (" + n + ")";
+    return s + " " + m;
+  }
+
   /* ---------- render ---------- */
   function renderStatus(cfg) {
     var b = $("badge");
@@ -342,6 +394,9 @@
   }
 
   function renderMask() {
+    if (typeof S.maskRaw !== "string" || !S.maskRaw.trim()) S.maskRaw = "auto";
+    S.mask = maskForSymbol(S.maskRaw);
+
     var bar = $("corebar");
     bar.innerHTML = S.cores.map(function (c) {
       var on = (S.mask & (1 << c.id)) ? " on" : "";
@@ -349,36 +404,54 @@
       return '<div class="core' + on + '">cpu' + c.id + " · " + mhz + "</div>";
     }).join("");
 
-    var cl = clusters(), top = cl[cl.length - 1] || { ids: [] };
+    var g = freqGroups();
+    if ($("topoLine")) {
+      $("topoLine").textContent = g.length
+        ? "topologi: " + g.map(function (x) {
+            return "cpu" + x.ids.join(",") + " @" + Math.round(x.freq / 1000) + "M";
+          }).join("  ·  ") + "   →   auto = " + autoMask()
+        : "topologi belum terbaca";
+    }
+
     var presets = [
-      { label: "Semua (" + S.cores.length + ")", ids: S.cores.map(function (c) { return c.id; }) },
-      { label: "Big " + top.ids.length, ids: top.ids },
-      { label: "Top 2", ids: S.cores.slice(-2).map(function (c) { return c.id; }) }
+      { sym: "auto", label: "Auto" },
+      { sym: "all", label: "Semua (" + S.cores.length + ")" }
     ];
-    var seenMask = {};
-    presets = presets.filter(function (p) {
-      var mv = maskOfCores(p.ids);
-      if (!mv || seenMask[mv]) return false;
-      seenMask[mv] = 1;
-      return true;
+    if (g.length > 1) {
+      var big = 0;
+      g.slice(1).forEach(function (x) { x.ids.forEach(function (i) { big += Math.pow(2, i); }); });
+      presets.push({ sym: "big", label: "Big " + coresOfMask(big).length });
+    }
+    var top = g.length ? g[g.length - 1] : { ids: [] };
+    if (top.ids.length) presets.push({ sym: "prime", label: "Prime " + top.ids.length });
+    if (S.cores.length >= 4) presets.push({ sym: "top4", label: "Top 4" });
+    if (S.cores.length >= 2) presets.push({ sym: "top2", label: "Top 2" });
+
+    var seen = {}, keep = [];
+    presets.forEach(function (p) {
+      var m = maskForSymbol(p.sym);
+      if (!m) return;
+      if (seen[m] && p.sym !== "auto") return;
+      seen[m] = 1; keep.push({ sym: p.sym, label: p.label, m: m });
     });
-    $("presets").innerHTML = presets.map(function (p, i) {
-      var m = maskOfCores(p.ids);
-      var on = (m === S.mask);
-      return '<button class="chip pick' + (on ? "" : " off") + '" data-preset="' + i + '">' +
-             esc(p.label) + ' <b>' + m + "</b></button>";
+    $("presets").innerHTML = keep.map(function (p, i) {
+      var on = (p.m === S.mask && (p.sym === S.maskRaw || (p.sym !== "auto" && S.maskRaw !== "auto")));
+      var exact = (p.sym === String(S.maskRaw).toLowerCase());
+      return '<button class="chip pick' + (exact ? "" : " off") + '" data-preset="' + i + '">' +
+             esc(p.label) + ' <b>' + p.m + "</b></button>";
     }).join("");
     $("presets").querySelectorAll("[data-preset]").forEach(function (el) {
       el.onclick = function () {
-        var p = presets[+el.getAttribute("data-preset")];
-        S.mask = maskOfCores(p.ids);
+        var p = keep[+el.getAttribute("data-preset")];
+        if (!p) return;
+        S.maskRaw = p.sym;
         renderMask();
       };
     });
 
-    $("maskInput").value = S.mask;
+    $("maskInput").value = String(S.maskRaw);
     var ids = coresOfMask(S.mask);
-    $("maskRead").value = ids.length ? "cpu " + ids.join(",") : "tidak valid";
+    $("maskRead").value = ids.length ? "mask " + S.mask + " → cpu " + ids.join(",") : "tidak valid";
   }
 
   function renderLibs() {
@@ -456,11 +529,9 @@
         var p = el.getAttribute("data-ovmask");
         S.overrides[p] = S.overrides[p] || {};
         var v = el.value.trim();
+        S.overrides[p] = S.overrides[p] || {};
         if (!v) delete S.overrides[p].mask;
-        else {
-          var n = v.indexOf("0x") === 0 ? parseInt(v, 16) : parseInt(v, 10);
-          if (!isNaN(n)) S.overrides[p].mask = n;
-        }
+        else S.overrides[p].mask = v;
       };
     });
     if (typeof refreshCheckOptions === "function") refreshCheckOptions();
@@ -540,8 +611,9 @@
       html += row("Libs belum load", c.check_libs_missing || "-", c.check_libs_missing ? "!" : "");
     }
 
-    var maskOk = c.check_sysfs_mask === c.check_cfg_mask;
-    html += row("Mask config", c.check_cfg_mask);
+    var maskOk = String(c.check_sysfs_mask) === String(c.check_cfg_mask);
+    html += row("Mask config", (c.check_cfg_mask_raw && c.check_cfg_mask_raw !== c.check_cfg_mask)
+                ? c.check_cfg_mask + " (" + c.check_cfg_mask_raw + ")" : c.check_cfg_mask);
     html += row("Mask sysfs", c.check_sysfs_mask, maskOk ? "✓" : "✗");
     html += row("Core diharap", "cpu " + (c.check_expected || "-"));
 
@@ -596,7 +668,9 @@
     S.enabled = cfg.enabled !== "0";
     S.mode = cfg.mode === "always" ? "always" : "auto";
     S.interval = parseInt(cfg.interval, 10) || 8;
-    S.mask = parseInt(cfg.mask, 10) || 240;
+    var mraw = (cfg.mask == null ? "" : String(cfg.mask)).trim();
+    S.maskRaw = mraw || "auto";
+    S.mask = maskForSymbol(S.maskRaw);
     S.pin = cfg.pin === "1";
     S.libs = (cfg.libs || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
     S.apps = (cfg.apps || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
@@ -605,7 +679,7 @@
       var m = k.match(/^app\.(.+)\.(mask|libs)$/);
       if (!m) return;
       S.overrides[m[1]] = S.overrides[m[1]] || {};
-      S.overrides[m[1]][m[2]] = m[2] === "mask" ? parseInt(cfg[k], 10) : cfg[k];
+      S.overrides[m[1]][m[2]] = m[2] === "mask" ? String(cfg[k]).trim() : cfg[k];
       if (S.apps.indexOf(m[1]) < 0) S.apps.push(m[1]);
     });
 
@@ -661,8 +735,11 @@
   }
 
   function save() {
-    var mask = parseInt($("maskInput").value, 10);
-    if (isNaN(mask) || mask <= 0) { toast("mask tidak valid", true); return Promise.resolve(); }
+    var raw = String($("maskInput").value || "").trim().toLowerCase();
+    if (!raw) raw = "auto";
+    var mask = maskForSymbol(raw);
+    if (!mask || mask <= 0) { toast("mask tidak valid", true); return Promise.resolve(); }
+    S.maskRaw = raw;
     S.mask = mask;
     var iv = parseInt($("interval").value, 10) || 8;
     if (iv < 3) iv = 3;
@@ -672,7 +749,7 @@
       "setk enabled " + (S.enabled ? 1 : 0),
       "setk mode " + S.mode,
       "setk interval " + S.interval,
-      "setk mask " + S.mask,
+      "setk mask " + S.maskRaw,
       "setk pin " + (S.pin ? 1 : 0),
       "setk libs " + q(S.libs.join(",")),
       "setk apps " + q(S.apps.join(","))
@@ -712,9 +789,9 @@
     $("enabled").onchange = function () { S.enabled = this.checked; };
     $("pin").onchange = function () { S.pin = this.checked; };
     $("maskInput").oninput = function () {
-      var v = this.value.trim();
-      var n = v.indexOf("0x") === 0 || v.indexOf("0X") === 0 ? parseInt(v, 16) : parseInt(v, 10);
-      if (!isNaN(n) && n > 0 && n <= 65535) { S.mask = n; renderMask(); }
+      var v = this.value.trim().toLowerCase();
+      S.maskRaw = v || "auto";
+      renderMask();
     };
     $("libAdd").onclick = function () {
       var v = $("libInput").value.trim();
